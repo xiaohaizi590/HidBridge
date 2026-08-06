@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider 路径：仅暴露 cache 目录，供分享内置的 receiver.exe 安装包 -->
+<paths>
+    <cache-path name="installer" path="." />
+</paths>
