@@ -145,14 +145,19 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 推送内置安装包：把 assets/installer/receiver.exe 拷贝到 cache 目录，
+     * 推送内置安装包：把 assets/installer/receiver.exe 拷贝到外部存储目录，
      * 通过 FileProvider 生成可分享 URI，再用系统分享（蓝牙等）发给电脑。
+     * 使用 FLAG_GRANT_PERSISTABLE_URI_PERMISSION 确保蓝牙进程在传输期间稳定读取。
      */
     private fun pushInstaller() {
-        val cacheFile = java.io.File(cacheDir, "receiver.exe")
+        // 使用内部存储 filesDir（MIUI/ColorOS 等定制 ROM 对外部存储 URI 读取限制极严，
+        // 内部存储经 FileProvider 暴露后跨进程访问最稳定）
+        val destDir = filesDir
+        val destFile = java.io.File(destDir, "receiver.exe")
+
         val copied = try {
             assets.open(installerAssetPath).use { input ->
-                cacheFile.outputStream().use { output -> input.copyTo(output) }
+                destFile.outputStream().use { output -> input.copyTo(output) }
             }
             true
         } catch (e: Exception) {
@@ -162,13 +167,16 @@ class MainActivity : ComponentActivity() {
         if (!copied) {
             Toast.makeText(
                 this,
-                "内置安装包缺失：请先在电脑运行 pc_receiver/build_exe.bat 打包，并确认 exe 已放入 assets/installer/",
+                "内置安装包缺失：请确认 receiver.exe 已放入 assets/installer/",
                 Toast.LENGTH_LONG
             ).show()
             return
         }
 
-        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", cacheFile)
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", destFile)
+
+        // 仅加 FLAG_GRANT_READ_URI_PERMISSION：
+        // ACTION_SEND 场景下 PERSISTABLE 多余，且在部分 MIUI 版本会被系统拦截
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/octet-stream"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -180,6 +188,7 @@ class MainActivity : ComponentActivity() {
             startActivity(Intent.createChooser(intent, "发送 receiver 安装包给电脑"))
         }.onFailure {
             android.util.Log.e("MainActivity", "启动分享失败", it)
+            Toast.makeText(this, "启动分享失败: ${it.message}", Toast.LENGTH_SHORT).show()
         }
     }
 

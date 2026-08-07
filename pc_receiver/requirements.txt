@@ -1,2 +1,0 @@
-vgamepad>=0.1.0
-PyBluezWin10>=1.0

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- FileProvider 路径：仅暴露 cache 目录，供分享内置的 receiver.exe 安装包 -->
+<!-- FileProvider 路径：暴露 cache + 外部存储目录，供分享内置的 receiver.exe 安装包 -->
 <paths>
-    <cache-path name="installer" path="." />
+    <files-path name="files" path="." />
+    <cache-path name="cache" path="." />
+    <external-files-path name="external_files" path="." />
 </paths>
