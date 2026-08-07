@@ -14,7 +14,20 @@
 </div>
 
 <div align="center">
-  <img src="./docs/hero.jpg" alt="HidBridge Demo" width="600" />
+  <table>
+    <tr>
+      <td align="center" width="50%">
+        <img src="./docs/hero.jpg" alt="HidBridge" width="300" />
+        <br />
+        <sub>主界面</sub>
+      </td>
+      <td align="center" width="50%">
+        <img src="./docs/screenshot.jpg" alt="Screenshot" width="300" />
+        <br />
+        <sub>使用示例</sub>
+      </td>
+    </tr>
+  </table>
 </div>
 
 ---
