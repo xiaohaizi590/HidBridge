@@ -593,7 +593,7 @@ private fun WifiBridgeSection(
 
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "提示：电脑运行 receiver.exe 后，请点击「自动发现电脑 IP」按钮",
+            text = "提示：电脑运行 receiver.exe 后，请点击「自动发现电脑 IP」按钮，再开启桥接开关。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

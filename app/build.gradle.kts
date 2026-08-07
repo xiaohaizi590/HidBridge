@@ -1,3 +1,4 @@
+import java.io.File
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -13,8 +14,8 @@ android {
     applicationId = "dev.hid.demo"
     minSdk = 28
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -41,6 +42,21 @@ android {
   buildFeatures {
     compose = true
   }
+}
+
+// 自定义 APK 输出文件名：HidBridge-v版本号.apk
+val releaseApkDir = project.layout.buildDirectory.dir("outputs/apk/release")
+tasks.matching { it.name == "assembleRelease" }.configureEach {
+    doLast {
+        val dir = releaseApkDir.get().asFile
+        fileTree(dir) { include("*.apk") }.forEach { apk ->
+            if (apk.name == "app-release.apk") {
+                val newFile = File(dir, "HidBridge-v1.2.apk")
+                apk.copyTo(newFile, overwrite = true)
+                apk.delete()
+            }
+        }
+    }
 }
 
 dependencies {
