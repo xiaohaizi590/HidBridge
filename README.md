@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**旧手机变游戏手柄桥接器 · USB-C 物理手柄 · 蓝牙 + WiFi 双通道 · 2ms 级低延迟**
+**安卓手机/旧手机变游戏手柄桥接器 · USB-C 物理手柄 · 蓝牙 + WiFi 双通道 · 2ms 级低延迟**
 
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non%20Commercial-red.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat&logo=android&logoColor=white)](https://android.com)
