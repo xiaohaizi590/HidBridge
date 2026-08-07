@@ -14,7 +14,7 @@
 </div>
 
 <div align="center">
-  <img src="docs/hero.jpg" alt="HidBridge Demo" width="600" />
+  <img src="./docs/hero.jpg" alt="HidBridge Demo" width="600" />
 </div>
 
 ---
