@@ -1,10 +1,3 @@
-# Build outputs
-*.apk
-*.aab
-*.ap_
-*.dex
-*.class
-
 # Gradle
 .gradle/
 build/
@@ -14,17 +7,31 @@ build/
 .idea/
 *.iml
 .vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
 
-# Keystore
-*.jks
-*.keystore
-
-# Generated files
-app/release/
+# Android
+local.properties
 captures/
 .externalNativeBuild/
 .cxx/
 
-# Local properties
-local.properties
+# Keys
+*.jks
+*.keystore
+keystore.properties
+
+# Generated files
+app/release/
+*.apk
+*.aab
+
+# Kotlin
+.kotlin/errors/
+
+# Build intermediates
+app/build/
