@@ -7,7 +7,7 @@
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non%20Commercial-red.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat&logo=android&logoColor=white)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Version](https://img.shields.io/badge/version-1.2-blue)](https://github.com/xiaohaizi590/HidBridge/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com/xiaohaizi590/HidBridge/releases)
 
 [English README](README.en.md) · [下载 APK](https://github.com/xiaohaizi590/HidBridge/releases)
 
@@ -88,7 +88,7 @@ receiver.exe
 ```bash
 git clone https://github.com/xiaohaizi590/HidBridge.git
 cd HidBridge && ./gradlew assembleRelease
-# APK: app/build/outputs/apk/release/HidBridge-v1.2.apk
+# APK: app/build/outputs/apk/release/HidBridge-v1.3.0.apk
 ```
 
 **安装后**：授予蓝牙、位置、附近设备权限
@@ -187,7 +187,7 @@ PC→手机: {"cmd":"udp_ready"}
 ### 构建
 
 ```bash
-./gradlew assembleRelease   # 输出 HidBridge-v1.2.apk
+./gradlew assembleRelease   # 输出 HidBridge-v1.3.0.apk
 ```
 
 ### 项目结构

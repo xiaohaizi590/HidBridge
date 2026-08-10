@@ -7,7 +7,7 @@
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non%20Commercial-red.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat&logo=android&logoColor=white)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Version](https://img.shields.io/badge/version-1.2-blue)](https://github.com/xiaohaizi590/HidBridge/releases)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com/xiaohaizi590/HidBridge/releases)
 [![CI](https://github.com/xiaohaizi590/HidBridge/actions/workflows/build.yml/badge.svg)](https://github.com/xiaohaizi590/HidBridge/actions/workflows/build.yml)
 
 [中文 README](README.md)
@@ -97,10 +97,10 @@ receiver.exe --install
 git clone https://github.com/xiaohaizi590/HidBridge.git
 cd HidBridge
 ./gradlew assembleRelease
-# Output: app/build/outputs/apk/release/HidBridge-v1.2.apk
+# Output: app/build/outputs/apk/release/HidBridge-v1.3.0.apk
 
 # Install
-adb install HidBridge-v1.2.apk
+adb install HidBridge-v1.3.0.apk
 ```
 
 Grant **Bluetooth**, **Location**, and **Nearby Devices** permissions on first launch.
@@ -302,7 +302,7 @@ Run as Administrator; manually download and install ViGEmBus driver.
 
 # Release build (R8 + resource shrinking)
 ./gradlew assembleRelease
-# Output: HidBridge-v1.2.apk
+# Output: HidBridge-v1.3.0.apk
 
 # Clean
 ./gradlew clean
