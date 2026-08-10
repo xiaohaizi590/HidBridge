@@ -27,7 +27,7 @@
         <sub>使用示例</sub>
       </td>
          <td align="center" width="33%">
-        <img src="./docs/pc.jpg" alt="Screenshot" width="300" />
+        <img src="./docs/pc.png" alt="Screenshot" width="300" />
         <br />
         <sub>使用示例</sub>
       </td>
