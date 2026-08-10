@@ -26,6 +26,11 @@
         <br />
         <sub>使用示例</sub>
       </td>
+         <td align="center" width="50%">
+        <img src="./docs/pc.jpg" alt="Screenshot" width="300" />
+        <br />
+        <sub>使用示例</sub>
+      </td>
     </tr>
   </table>
 </div>
