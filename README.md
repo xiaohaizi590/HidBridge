@@ -53,7 +53,7 @@
 │   手机 App    │◀────────────────────▶│   电脑       │
 │  (HidBridge)  │                     │  (Windows)   │
 └──────┬───────┘                     └──────┬───────┘
-       │ ② 推送 receiver.exe                 │ 运行 receiver.exe
+       │ ② 推送 GamepadBridge.exe                 │ 运行 GamepadBridge.exe
        │                                    │ (自动装驱动)
        ▼                                    ▼
 ┌──────────────┐      ③ WiFi 桥接       ┌──────────────┐
@@ -62,7 +62,7 @@
 └──────────────┘                     └──────────────┘
 ```
 
-> **首次使用**：PC 运行 `receiver.exe` → 手机 USB 插手柄 + 蓝牙配对 → App 开启 WiFi 桥接 → 🎮
+> **首次使用**：PC 运行 `GamepadBridge.exe` → 手机 USB 插手柄 + 蓝牙配对 → App 开启 WiFi 桥接 → 🎮
 
 ---
 
@@ -71,8 +71,8 @@
 ### PC 端
 
 ```bash
-# 手机 App 推送 receiver.exe（首次），PC 以管理员身份运行
-receiver.exe
+# 手机 App 推送GamepadBridge.exe（首次），PC 以管理员身份运行
+GamepadBridge.exe
 # ✅ 自动安装 ViGEmBus 虚拟驱动
 # ✅ 自动注册开机自启
 # ✅ 首次运行需前台保持
@@ -120,7 +120,7 @@ cd HidBridge && ./gradlew assembleRelease
 ```
 ┌──── Android 手机 ────┐     ┌──── Windows 电脑 ────┐
 │ BluetoothHidDevice    │────▶│ Windows HID 栈        │
-│ InputBridge (手柄)    │     │ receiver.exe          │
+│ InputBridge (手柄)    │     │ GamepadBridge.exe          │
 │ WifiCommandBridge     │◀────│   RFCOMM 命令通道     │
 │ UdpBridge (UDP 发送)  │────▶│   UDP → ViGEmBus      │
 └───────────────────────┘     └───────────────────────┘
@@ -194,7 +194,7 @@ PC→手机: {"cmd":"udp_ready"}
 ```
 HidBridge/
 ├── app/src/main/
-│   ├── assets/installer/receiver.exe
+│   ├── assets/installer/GamepadBridge.exe
 │   ├── java/dev/hid/demo/
 │   │   ├── bluetooth/     # HID 引擎
 │   │   ├── input/          # 手柄桥接 + UDP
