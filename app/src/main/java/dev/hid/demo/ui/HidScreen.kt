@@ -418,7 +418,7 @@ private fun DeviceRow(
 private fun InstallerSection(onPushInstaller: () -> Unit) {
     Column {
         Text(
-            text = "电脑端需要安装接收程序 receiver.exe，用于接收手柄数据并转发到虚拟 Xbox 手柄。",
+            text = "电脑端需要安装接收程序 GamepadBridge.exe，用于接收手柄数据并转发到虚拟 Xbox 手柄。",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -433,7 +433,7 @@ private fun InstallerSection(onPushInstaller: () -> Unit) {
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "电脑收到后双击 receiver.exe 即可完成安装（需要管理员权限），请保持 receiver.exe在前台运行中",
+            text = "电脑收到后双击 GamepadBridge.exe 即可完成安装（需要管理员权限），请保持 GamepadBridge.exe在前台运行中",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -479,7 +479,7 @@ private fun WifiBridgeSection(
             title = { Text("电脑未就绪") },
             text = {
                 Text(
-                    "未收到电脑接收程序的响应，请确认 receiver.exe 正在电脑上运行。\n\n" +
+                    "未收到电脑接收程序的响应，请确认 GamepadBridge.exe 正在电脑上运行。\n\n" +
                         "是否现在重新推送安装包？"
                 )
             },
@@ -593,7 +593,7 @@ private fun WifiBridgeSection(
 
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "提示：电脑运行 receiver.exe 后，请点击「自动发现电脑 IP」按钮，再开启桥接开关。",
+            text = "提示：电脑运行 GamepadBridge.exe 后，请点击「自动发现电脑 IP」按钮，再开启桥接开关。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

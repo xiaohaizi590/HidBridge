@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
  * RFCOMM 控制通道（阶段2：通道建立）
  *
  * 手机作为蓝牙 RFCOMM **服务端**（BluetoothServerSocket 监听），
- * 电脑端 receiver.py 作为 RFCOMM 客户端主动连上来。通道建立后，
+ * 电脑端 GamepadBridge.exe 作为 RFCOMM 客户端主动连上来。通道建立后，
  * 双方通过**文本行协议**交换命令 / 响应（每行一条，UTF-8 + '\n'）。
  *
  * 阶段3 起的具体命令（wifi_info / install_driver / start_udp / ping）不在本文件，

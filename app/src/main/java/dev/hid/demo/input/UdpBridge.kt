@@ -281,7 +281,7 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
             if (!isActive || !_enabled.value) return@launch
             // 开启后才收到的 ACK 才算数（ackTime 在 start 前可能残留旧值）
             if (ackTime.get() < startTime) {
-                Log.w(TAG, "开启 WiFi 桥接后 ${OFFLINE_CHECK_DELAY_MS}ms 未收到电脑回包，电脑可能未运行 receiver")
+                Log.w(TAG, "开启 WiFi 桥接后 ${OFFLINE_CHECK_DELAY_MS}ms 未收到电脑回包，电脑可能未运行 GamepadBridge")
                 val cb = onComputerOffline
                 if (cb != null) {
                     scope.launch(Dispatchers.Main) { cb() }

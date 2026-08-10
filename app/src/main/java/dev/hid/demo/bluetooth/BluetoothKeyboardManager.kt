@@ -144,6 +144,8 @@ class BluetoothKeyboardManager(private val context: Context) {
     private val managerScope = CoroutineScope(Dispatchers.IO + Job())
     private val appRegistrationState = MutableStateFlow(false)
     @Volatile private var isRegisteringInProcess = false
+    // 防重复配对：createBond 进行中忽略重复点击/重复请求
+    @Volatile private var isPairingInProcess = false
     private val isAppRegistered: Boolean get() = appRegistrationState.value
     private val connectionStateFlow = MutableSharedFlow<Pair<BluetoothDevice, Int>>(
         extraBufferCapacity = 1,
@@ -466,19 +468,51 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun pairDevice(device: BluetoothDevice) {
+        if (isPairingInProcess) {
+            Log.w("BluetoothKeyboard", "Pairing already in progress, ignoring duplicate request for ${device.address}")
+            return
+        }
+        isPairingInProcess = true
         stopScanning()
         val dName = device.name ?: device.address
         _statusMessage.value = "正在请求与 '$dName' 配对……"
-        try {
-            val success = device.createBond()
-            if (success) {
-                _statusMessage.value = "已发起配对请求，请在 '$dName' 上确认。"
-            } else {
-                _statusMessage.value = "发起与 '$dName' 的配对请求失败。"
+        managerScope.launch {
+            try {
+                // 等待 discovery 完全停止：部分蓝牙栈在扫描进行中会拒绝 bond 请求
+                val discoveryStopped = withTimeoutOrNull(3000) {
+                    while (bluetoothAdapter?.isDiscovering == true) {
+                        delay(100)
+                    }
+                    true
+                } ?: false
+                if (!discoveryStopped) {
+                    Log.w("BluetoothKeyboard", "Discovery did not stop within 3s, proceeding to bond anyway")
+                }
+
+                // createBond 偶发失败（蓝牙栈瞬时繁忙/上次配对未回收），自动重试 3 次
+                var bonded = false
+                for (attempt in 1..3) {
+                    try {
+                        bonded = device.createBond()
+                        if (bonded) {
+                            _statusMessage.value = "已发起配对请求，请在 '$dName' 上确认。"
+                            break
+                        }
+                    } catch (e: Exception) {
+                        Log.e("BluetoothKeyboard", "Error calling createBond (attempt $attempt/3)", e)
+                    }
+                    if (attempt < 3) {
+                        _statusMessage.value = "配对请求失败，正在重试（$attempt/3）……"
+                        delay(if (attempt == 1) 800L else 1500L)
+                    }
+                }
+                if (!bonded) {
+                    _statusMessage.value = "发起与 '$dName' 的配对请求失败，请检查对方是否已准备接收。"
+                    Log.w("BluetoothKeyboard", "createBond failed after 3 attempts for ${device.address}")
+                }
+            } finally {
+                isPairingInProcess = false
             }
-        } catch (e: Exception) {
-            Log.e("BluetoothKeyboard", "Error calling createBond", e)
-            _statusMessage.value = "配对失败：${e.localizedMessage}"
         }
     }
 

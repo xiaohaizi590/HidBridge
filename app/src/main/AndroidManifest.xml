@@ -38,7 +38,7 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
-        <!-- 分享内置安装包（receiver.exe）给电脑时使用 -->
+        <!-- 分享内置安装包（GamepadBridge.exe）给电脑时使用 -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
