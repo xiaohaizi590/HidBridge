@@ -16,21 +16,15 @@
 <div align="center">
   <table>
     <tr>
-      <td align="center" width="33%">
+      <td align="center" width="50%">
         <img src="./docs/hero.jpg" alt="HidBridge" width="300" />
         <br />
         <sub>主界面</sub>
       </td>
-      <td align="center" width="33%">
+      <td align="center" width="50%">
         <img src="./docs/screenshot.jpg" alt="Screenshot" width="300" />
         <br />
         <sub>使用示例</sub>
-      </td>
-         <td align="center" width="33%">
-        <img src="./docs/pc.png" alt="Screenshot" width="300" />
-        <br />
-        <sub>使用示例</sub>
-      </td>
     </tr>
   </table>
 </div>
