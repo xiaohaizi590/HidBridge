@@ -1,6 +1,19 @@
 package dev.hid.demo.ui
 
 import android.bluetooth.BluetoothDevice
+import android.content.Context
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -58,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -66,6 +80,7 @@ import dev.hid.demo.bluetooth.BluetoothKeyboardManager
 import dev.hid.demo.bluetooth.BluetoothState
 import dev.hid.demo.input.InputBridge
 import dev.hid.demo.input.UdpBridge
+import dev.hid.demo.service.VibrateManager
 import dev.hid.demo.wifi.WifiCommandBridge
 import dev.hid.demo.wifi.WifiCommandHandler
 import kotlinx.coroutines.CoroutineScope
@@ -85,7 +100,9 @@ fun HidScreen(
     udpBridge: UdpBridge,
     commandBridge: WifiCommandBridge,
     commandHandler: WifiCommandHandler,
+    vibrateManager: VibrateManager?,
     onEnterBlackScreen: () -> Unit,
+    onEnterVirtualGamepad: () -> Unit,
     onPushInstaller: () -> Unit
 ) {
     val serviceState by btManager.serviceState.collectAsState()
@@ -140,12 +157,16 @@ fun HidScreen(
                 inputBridge = inputBridge,
                 onEnterBlackScreen = onEnterBlackScreen,
                 btManager = btManager,
+                vibrateManager = vibrateManager,
                 scope = scope
             )
         }}
 
+        // 模拟手柄入口（手机当手柄用，Xbox / PS 双布局）
+        item { VirtualGamepadEntryCard(onEnterVirtualGamepad = onEnterVirtualGamepad) }
+
         // 回报率设置
-        item { RateSettingSection(inputBridge, udpBridge) }
+        item { RateSettingSection(inputBridge, udpBridge, commandHandler) }
 
         item { Spacer(Modifier.height(24.dp)) }
     }
@@ -166,6 +187,8 @@ private fun HeroCard(
         BluetoothState.BluetoothOff -> Color(0xFFF44336)
         else -> Color(0xFF9E9E9E)
     }
+    // 状态点颜色平滑过渡，避免生硬跳变
+    val animatedStateColor by animateColorAsState(stateColor, tween(400), label = "stateColor")
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -176,14 +199,24 @@ private fun HeroCard(
                 Box(
                     modifier = Modifier
                         .size(12.dp)
-                        .background(stateColor, CircleShape)
+                        .background(animatedStateColor, CircleShape)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
-                    text = serviceStateLabel(serviceState),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+                // 状态标题切换：旧文字淡出、新文字从下方滑入
+                AnimatedContent(
+                    targetState = serviceStateLabel(serviceState),
+                    transitionSpec = {
+                        (fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 2 })
+                            .togetherWith(fadeOut(tween(150)))
+                    },
+                    label = "heroTitle"
+                ) { label ->
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(
@@ -191,17 +224,20 @@ private fun HeroCard(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
-            if (connectedDevice != null) {
-                Spacer(Modifier.height(8.dp))
-                AssistChip(
-                    onClick = {},
-                    label = { Text("已连接: ${btManager.deviceDisplayName(connectedDevice) ?: connectedDevice.address}") },
-                    leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        labelColor = MaterialTheme.colorScheme.onPrimary
+            // 已连接提示：淡入 + 垂直展开
+            AnimatedVisibility(visible = connectedDevice != null) {
+                Column {
+                    Spacer(Modifier.height(8.dp))
+                    AssistChip(
+                        onClick = {},
+                        label = { Text("已连接: ${connectedDevice?.let { btManager.deviceDisplayName(it) ?: it.address } ?: ""}") },
+                        leadingIcon = { Icon(Icons.Default.CheckCircle, null) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            labelColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -220,8 +256,8 @@ private fun StepCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = if (completed) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface
+            // 背景恒定，避免连接状态变化时整卡变色；完成状态仅由步骤徽章体现
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(Modifier.padding(16.dp)) {
@@ -276,11 +312,11 @@ private fun BluetoothConnectionSection(
     connectedDevice: BluetoothDevice?,
     btManager: BluetoothKeyboardManager
 ) {
-    Column {
+    Column(Modifier.animateContentSize()) {
         // 操作按钮
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { btManager.startScanning() },
+                onClick = rememberClickGuard { btManager.startScanning() },
                 modifier = Modifier.weight(1f),
                 enabled = !isScanning
             ) {
@@ -289,44 +325,57 @@ private fun BluetoothConnectionSection(
                 Text(if (isScanning) "扫描中..." else "扫描电脑")
             }
             OutlinedButton(
-                onClick = { btManager.stopScanning() },
+                onClick = rememberClickGuard { btManager.stopScanning() },
                 enabled = isScanning
             ) { Text("停止") }
         }
 
-        if (isScanning) {
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        // 扫描进度条：淡入淡出
+        AnimatedVisibility(visible = isScanning) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
         }
 
         Spacer(Modifier.height(12.dp))
 
-        // 已配对设备
+        // 已配对设备：逐条滑入
         if (bondedDevices.isNotEmpty()) {
             Text("已配对设备", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             bondedDevices.forEach { device ->
-                DeviceRow(
-                    device = device,
-                    isConnected = connectedDevice?.address == device.address,
-                    btManager = btManager,
-                    onClick = { btManager.connectDevice(device) }
-                )
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 4 }
+                ) {
+                    DeviceRow(
+                        device = device,
+                        isConnected = connectedDevice?.address == device.address,
+                        btManager = btManager,
+                        onClick = { btManager.connectDevice(device) }
+                    )
+                }
             }
         }
 
-        // 扫描结果
+        // 扫描结果：逐条滑入
         if (scannedDevices.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
             Text("扫描到的设备", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
             scannedDevices.forEach { device ->
-                DeviceRow(
-                    device = device,
-                    isConnected = connectedDevice?.address == device.address,
-                    btManager = btManager,
-                    onClick = { btManager.connectDevice(device) }
-                )
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it / 4 }
+                ) {
+                    DeviceRow(
+                        device = device,
+                        isConnected = connectedDevice?.address == device.address,
+                        btManager = btManager,
+                        onClick = { btManager.connectDevice(device) }
+                    )
+                }
             }
         }
 
@@ -345,12 +394,15 @@ private fun BluetoothConnectionSection(
             }
         }
 
-        if (connectedDevice != null) {
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { btManager.disconnectDevice() },
-                modifier = Modifier.fillMaxWidth()
-            ) { Text("断开连接") }
+        // 断开按钮：淡入 + 展开
+        AnimatedVisibility(visible = connectedDevice != null) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = rememberClickGuard { btManager.disconnectDevice() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("断开连接") }
+            }
         }
     }
 }
@@ -362,12 +414,23 @@ private fun DeviceRow(
     btManager: BluetoothKeyboardManager,
     onClick: () -> Unit
 ) {
+    // 连接/断开：卡片底色平滑过渡
+    val cardColor by animateColorAsState(
+        targetValue = if (isConnected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant,
+        tween(300),
+        label = "deviceCardColor"
+    )
+    val iconTint by animateColorAsState(
+        targetValue = if (isConnected) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.onSurfaceVariant,
+        tween(300),
+        label = "deviceIconTint"
+    )
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isConnected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant
-        ),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
@@ -379,7 +442,7 @@ private fun DeviceRow(
             Icon(
                 Icons.Default.Computer,
                 null,
-                tint = if (isConnected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = iconTint
             )
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -395,7 +458,12 @@ private fun DeviceRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (isConnected) {
+            // 连接成功：徽章缩放弹出；断开：淡出
+            AnimatedVisibility(
+                visible = isConnected,
+                enter = fadeIn(tween(200)) + scaleIn(initialScale = 0.6f, animationSpec = tween(250)),
+                exit = fadeOut(tween(150))
+            ) {
                 AssistChip(
                     onClick = {},
                     label = { Text("已连接") },
@@ -404,8 +472,12 @@ private fun DeviceRow(
                         labelColor = MaterialTheme.colorScheme.onPrimary
                     )
                 )
-            } else {
-                TextButton(onClick = onClick) { Text("连接") }
+            }
+            AnimatedVisibility(
+                visible = !isConnected,
+                enter = fadeIn(tween(200))
+            ) {
+                TextButton(onClick = rememberClickGuard { onClick() }) { Text("连接") }
             }
         }
     }
@@ -424,7 +496,7 @@ private fun InstallerSection(onPushInstaller: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Button(
-            onClick = onPushInstaller,
+            onClick = rememberClickGuard { onPushInstaller() },
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.Download, null, modifier = Modifier.size(18.dp))
@@ -492,7 +564,7 @@ private fun WifiBridgeSection(
         )
     }
 
-    Column {
+    Column(Modifier.animateContentSize()) {
         // 桥接开关
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -525,29 +597,36 @@ private fun WifiBridgeSection(
             )
         }
 
-        if (enabled) {
-            Spacer(Modifier.height(8.dp))
-            AssistChip(
-                onClick = {},
-                label = {
-                    Text(
-                        if (ackStatus.startsWith("电脑已确认")) "连接正常" else "等待电脑响应...",
-                        color = if (ackStatus.startsWith("电脑已确认")) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSecondaryContainer
+        // 连接状态提示：开关打开时淡入 + 垂直展开
+        AnimatedVisibility(
+            visible = enabled,
+            enter = fadeIn(tween(250)) + expandVertically(tween(250)),
+            exit = fadeOut(tween(150)) + shrinkVertically(tween(150))
+        ) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+                AssistChip(
+                    onClick = {},
+                    label = {
+                        Text(
+                            if (ackStatus.startsWith("电脑已确认")) "连接正常" else "等待电脑响应...",
+                            color = if (ackStatus.startsWith("电脑已确认")) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    },
+                    leadingIcon = {
+                        if (ackStatus.startsWith("电脑已确认")) {
+                            Icon(Icons.Default.CheckCircle, null)
+                        } else {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        }
+                    },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (ackStatus.startsWith("电脑已确认")) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.secondaryContainer
                     )
-                },
-                leadingIcon = {
-                    if (ackStatus.startsWith("电脑已确认")) {
-                        Icon(Icons.Default.CheckCircle, null)
-                    } else {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    }
-                },
-                colors = AssistChipDefaults.assistChipColors(
-                    containerColor = if (ackStatus.startsWith("电脑已确认")) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.secondaryContainer
                 )
-            )
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -575,7 +654,7 @@ private fun WifiBridgeSection(
 
         // 自动发现按钮
         OutlinedButton(
-            onClick = {
+            onClick = rememberClickGuard {
                 scope.launch {
                     val ips = udpBridge.discoverPcIps()
                     if (ips.isNotEmpty()) {
@@ -607,11 +686,14 @@ private fun GamepadSection(
     inputBridge: InputBridge,
     onEnterBlackScreen: () -> Unit,
     btManager: BluetoothKeyboardManager,
+    vibrateManager: VibrateManager?,
     scope: CoroutineScope
 ) {
     val snapshot by inputBridge.state.collectAsState()
     val controllerName by inputBridge.controllerName.collectAsState()
     var bridgeEnabled by remember { mutableStateOf(inputBridge.isEnabled) }
+    val appContext = LocalContext.current
+    var vibrationEnabled by remember { mutableStateOf(vibrateManager?.enabled ?: false) }
 
     Column {
         // 手柄状态
@@ -662,58 +744,136 @@ private fun GamepadSection(
             )
         }
 
-        if (bridgeEnabled) {
-            Spacer(Modifier.height(8.dp))
-
-            // 实时状态可视化
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                // 左摇杆
-                JoystickVisualizer(
-                    x = snapshot.leftX,
-                    y = snapshot.leftY,
-                    label = "左摇杆"
+        // 手机震动：实体手柄无马达时，由手机代替震动（持久化 main_vibration_enabled）
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "手机震动",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium
                 )
-                // 右摇杆
-                JoystickVisualizer(
-                    x = snapshot.rightX,
-                    y = snapshot.rightY,
-                    label = "右摇杆"
+                Text(
+                    text = "实体手柄无马达时，由手机代替震动",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Switch(
+                checked = vibrationEnabled,
+                onCheckedChange = { on ->
+                    vibrationEnabled = on
+                    vibrateManager?.enabled = on
+                    appContext.getSharedPreferences("gamepad_layout", Context.MODE_PRIVATE)
+                        .edit()
+                        .putBoolean("main_vibration_enabled", on)
+                        .apply()
+                }
+            )
+        }
 
+        // 手柄桥接打开：状态区域弹出动画（缩放 + 淡入 + 展开）
+        AnimatedVisibility(
+            visible = bridgeEnabled,
+            enter = fadeIn(tween(250)) + scaleIn(initialScale = 0.92f, animationSpec = tween(250)) + expandVertically(tween(250)),
+            exit = fadeOut(tween(150)) + shrinkVertically(tween(150))
+        ) {
+            Column {
+                Spacer(Modifier.height(8.dp))
+
+                // 实时状态可视化
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // 左摇杆
+                    JoystickVisualizer(
+                        x = snapshot.leftX,
+                        y = snapshot.leftY,
+                        label = "左摇杆"
+                    )
+                    // 右摇杆
+                    JoystickVisualizer(
+                        x = snapshot.rightX,
+                        y = snapshot.rightY,
+                        label = "右摇杆"
+                    )
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+                // 按键状态
+                Text(
+                    text = "按键状态",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(4.dp))
+                ButtonGrid(snapshot.buttonMask)
+
+                Spacer(Modifier.height(16.dp))
+
+                // 进入游戏按钮
+                Button(
+                    onClick = rememberClickGuard { onEnterBlackScreen() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(Icons.Default.SportsEsports, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("进入游戏模式（黑屏）")
+                }
+                Text(
+                    text = "黑屏模式下持续转发手柄数据，长按屏幕退出",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+// ==================== 模拟手柄入口卡片 ====================
+
+@Composable
+private fun VirtualGamepadEntryCard(onEnterVirtualGamepad: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.SportsEsports,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "模拟手柄",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "把手机变成游戏手柄，支持 Xbox / PS 双布局切换",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Spacer(Modifier.height(12.dp))
-
-            // 按键状态
-            Text(
-                text = "按键状态",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(4.dp))
-            ButtonGrid(snapshot.buttonMask)
-
-            Spacer(Modifier.height(16.dp))
-
-            // 进入游戏按钮
             Button(
-                onClick = onEnterBlackScreen,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
+                onClick = rememberClickGuard { onEnterVirtualGamepad() },
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.SportsEsports, null)
-                Spacer(Modifier.width(8.dp))
-                Text("进入游戏模式（黑屏）")
+                Icon(Icons.Default.SportsEsports, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("进入模拟手柄")
             }
-            Text(
-                text = "黑屏模式下持续转发手柄数据，长按屏幕退出",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -1037,19 +1197,21 @@ private fun ButtonGrid(buttonMask: Int) {
 
 // ==================== 回报率设置 ====================
 
-private val RATE_OPTIONS = listOf(125, 250, 500, 750)
-private val RATE_LABELS = mapOf(125 to "省电", 250 to "均衡", 500 to "电竞", 750 to "极致")
+private val RATE_OPTIONS = listOf(125, 250, 500, 750, 1000)
+private val RATE_LABELS = mapOf(125 to "省电", 250 to "均衡", 500 to "电竞", 750 to "极致", 1000 to "超频")
 private val RATE_DESCRIPTIONS = mapOf(
     125 to "省电模式，适合长时间使用",
     250 to "日常游戏，性价比高",
     500 to "电竞推荐，响应灵敏",
-    750 to "职业级刷新，耗电增加"
+    750 to "职业级刷新，耗电增加",
+    1000 to "最高刷新率，响应最快，耗电显著增加"
 )
 
 @Composable
 private fun RateSettingSection(
     inputBridge: InputBridge,
-    udpBridge: UdpBridge
+    udpBridge: UdpBridge,
+    commandHandler: WifiCommandHandler
 ) {
     val currentRate = inputBridge.getCurrentRate()
     var selectedIndex by remember { mutableStateOf(RATE_OPTIONS.indexOf(currentRate).coerceAtLeast(0)) }
@@ -1071,7 +1233,20 @@ private fun RateSettingSection(
                 Spacer(Modifier.weight(1f))
                 AssistChip(
                     onClick = {},
-                    label = { Text("${RATE_OPTIONS[selectedIndex]}Hz · ${RATE_LABELS[RATE_OPTIONS[selectedIndex]]}") }
+                    label = {
+                        // 档位切换：数字按滑动方向滚动切换
+                        AnimatedContent(
+                            targetState = selectedIndex,
+                            transitionSpec = {
+                                val direction = if (targetState > initialState) 1 else -1
+                                (fadeIn(tween(200)) + slideInVertically(tween(200)) { direction * it / 2 })
+                                    .togetherWith(fadeOut(tween(120)))
+                            },
+                            label = "rateLabel"
+                        ) { idx ->
+                            Text("${RATE_OPTIONS[idx]}Hz · ${RATE_LABELS[RATE_OPTIONS[idx]]}")
+                        }
+                    }
                 )
             }
 
@@ -1079,14 +1254,16 @@ private fun RateSettingSection(
 
             Slider(
                 value = selectedIndex.toFloat(),
-                onValueChange = { selectedIndex = it.toInt().coerceIn(0, 3) },
+                onValueChange = { selectedIndex = it.toInt().coerceIn(0, 4) },
                 onValueChangeFinished = {
                     val hz = RATE_OPTIONS[selectedIndex]
                     inputBridge.setRate(hz)
                     if (udpBridge.isEnabled()) udpBridge.setRate(hz)
+                    // 通过命令通道主动通知电脑端新档位，避免电脑端靠测量窗口滞后
+                    commandHandler.sendRateRate(hz)
                 },
                 steps = 3,
-                valueRange = 0f..3f,
+                valueRange = 0f..4f,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -1108,16 +1285,39 @@ private fun RateSettingSection(
             }
 
             Spacer(Modifier.height(4.dp))
-            Text(
-                text = RATE_DESCRIPTIONS[RATE_OPTIONS[selectedIndex]] ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // 档位说明：切换时淡入淡出
+            AnimatedContent(
+                targetState = selectedIndex,
+                transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+                label = "rateDescription"
+            ) { idx ->
+                Text(
+                    text = RATE_DESCRIPTIONS[RATE_OPTIONS[idx]] ?: "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
 
 // ==================== 辅助函数 ====================
+
+/**
+ * 防连点保护：返回一个新回调，[intervalMs] 毫秒内的重复触发会被忽略。
+ * 状态按调用位置独立记录，多个按钮互不影响。
+ */
+@Composable
+private fun rememberClickGuard(intervalMs: Long = 400L, block: () -> Unit): () -> Unit {
+    val lastClick = remember { arrayOf(0L) }
+    return {
+        val now = System.currentTimeMillis()
+        if (now - lastClick[0] >= intervalMs) {
+            lastClick[0] = now
+            block()
+        }
+    }
+}
 
 private fun serviceStateLabel(state: BluetoothState): String = when (state) {
     BluetoothState.Unsupported -> "设备不支持蓝牙 HID"

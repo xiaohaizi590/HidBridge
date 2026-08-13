@@ -1,11 +1,13 @@
 package dev.hid.demo.input
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
 import android.os.SystemClock
 import android.util.Log
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -53,8 +55,8 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
         /** 电脑端 IP 发现端口（UDP 广播） */
         const val DISCOVERY_PORT = 47809
 
-        /** 回报率 → 发送间隔映射 */
-        val RATE_TO_INTERVAL = mapOf(125 to 8L, 250 to 4L, 500 to 2L, 750 to 1L)
+        /** 游戏震动回传端口（电脑端单播 → 手机）：PC → 手机 UDP 震动通道 */
+        const val VIBRATION_PORT = 47810
 
         /** 超过该时间未收到电脑 ACK，判定链路确认丢失 */
         private const val ACK_TIMEOUT_MS = 2000L
@@ -69,6 +71,10 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
     /** 当前发送间隔（毫秒），默认 250Hz = 4ms */
     @Volatile
     private var sendIntervalMs = 4L
+
+    /** 当前回报率（Hz），用于状态文本展示（750/1000 间隔相同，需单独记录） */
+    @Volatile
+    private var currentRateHz = 250
 
     private val latest = AtomicReference(InputBridge.GamepadSnapshot(0, 0f, 0f, 0f, 0f))
     private val seq = AtomicInteger(0)
@@ -101,9 +107,53 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
      */
     var onComputerOffline: (() -> Unit)? = null
 
+    /**
+     * 游戏震动回传回调：电脑端通过 UDP 震动通道（[VIBRATION_PORT]）发送
+     * {"cmd":"vibrate","l":..,"s":..}，解析后回调 (大马达, 小马达) 0-255。
+     * 由 MainActivity 接线到 VibrateManager 执行手机震动。
+     */
+    var onVibration: ((l: Int, s: Int) -> Unit)? = null
+
+    private var vibrationJob: Job? = null
+    private var vibrationSocket: DatagramSocket? = null
+
     /** 由 InputBridge.send() 调用：更新待发送的最新快照 */
     fun update(snapshot: InputBridge.GamepadSnapshot) {
         latest.set(snapshot)
+    }
+
+    /**
+     * 启动游戏震动 UDP 监听：绑定本地 [VIBRATION_PORT]，等待电脑端单播
+     * 发送震动命令 {"cmd":"vibrate","l":200,"s":100}。与数据发送通道互不干扰，
+     * App 启动即开始监听（低开销），WiFi 桥接是否启用不影响接收。
+     */
+    fun startVibrationListener() {
+        if (vibrationJob != null) return
+        val sock = runCatching { DatagramSocket(VIBRATION_PORT) }.getOrNull()
+        if (sock == null) {
+            Log.w(TAG, "震动端口 $VIBRATION_PORT 绑定失败，游戏震动回传不可用")
+            return
+        }
+        vibrationSocket = sock
+        vibrationJob = scope.launch(Dispatchers.IO) {
+            val buf = ByteArray(128)
+            while (isActive) {
+                val packet = DatagramPacket(buf, buf.size)
+                try {
+                    sock.receive(packet)
+                    val text = String(packet.data, 0, packet.length, Charsets.UTF_8)
+                    val json = org.json.JSONObject(text)
+                    if (json.optString("cmd") == "vibrate") {
+                        val l = json.optInt("l", 0)
+                        val s = json.optInt("s", 0)
+                        Log.d(TAG, "收到游戏震动 l=$l s=$s from ${packet.address.hostAddress}")
+                        onVibration?.invoke(l, s)
+                    }
+                } catch (e: Exception) {
+                    if (isActive) Log.d(TAG, "震动监听异常: ${e.message}")
+                }
+            }
+        }
     }
 
     /**
@@ -169,20 +219,45 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
         }
     }
 
-    /** 计算 WiFi 广播地址（255.255.255.255 或定向广播） */
-    @Suppress("DEPRECATION")
+    /**
+     * 计算 WiFi 定向广播地址。
+     * 用 ConnectivityManager.getLinkProperties() 取 IPv4 链路地址 + 前缀长度，
+     * 替代已废弃的 WifiManager.getDhcpInfo()（无需 NEARBY_WIFI_DEVICES 权限）；
+     * 取不到时退回 255.255.255.255 全子网广播。
+     */
     private fun getBroadcastAddress(): InetAddress {
-        val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val dhcp = wm.dhcpInfo
-        // 定向广播：适合同子网
-        val broadcast = (dhcp.ipAddress and dhcp.netmask) or dhcp.netmask.inv()
-        val bytes = byteArrayOf(
-            (broadcast and 0xFF).toByte(),
-            (broadcast shr 8 and 0xFF).toByte(),
-            (broadcast shr 16 and 0xFF).toByte(),
-            (broadcast shr 24 and 0xFF).toByte()
-        )
-        return InetAddress.getByAddress(bytes)
+        val fallback = runCatching { InetAddress.getByName("255.255.255.255") }.getOrNull()
+            ?: return InetAddress.getLoopbackAddress()
+        val cm = context.applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return fallback
+        val lp = cm.getLinkProperties(network) ?: return fallback
+        val ipv4 = lp.linkAddresses.firstOrNull { it.address is Inet4Address } ?: return fallback
+        val ip = (ipv4.address as Inet4Address).address // 网络序 4 字节
+        val prefix = ipv4.prefixLength.coerceIn(0, 32)
+
+        // 由前缀长度生成子网掩码
+        val mask = ByteArray(4)
+        var remaining = prefix
+        for (i in 0 until 4) {
+            mask[i] = when {
+                remaining >= 8 -> {
+                    remaining -= 8
+                    0xFF.toByte()
+                }
+                remaining > 0 -> {
+                    val m = (0xFF shl (8 - remaining)) and 0xFF
+                    remaining = 0
+                    m.toByte()
+                }
+                else -> 0
+            }
+        }
+        // 定向广播地址 = (ip & mask) | ~mask
+        val broadcast = ByteArray(4)
+        for (i in 0 until 4) {
+            broadcast[i] = ((ip[i].toInt() and mask[i].toInt()) or (mask[i].toInt().inv() and 0xFF)).toByte()
+        }
+        return InetAddress.getByAddress(broadcast)
     }
 
     /** 启用 / 停用 WiFi 桥接。启用时校验并设置电脑 IP；已启用状态下改 IP 会即时生效。 */
@@ -203,10 +278,11 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
 
     fun isEnabled(): Boolean = _enabled.value
 
-    /** 设置回报率（Hz）：125/250/500/750。已启用时即时生效。 */
+    /** 设置回报率（Hz）：125/250/500/750/1000。已启用时即时生效。 */
     fun setRate(hz: Int) {
-        val interval = RATE_TO_INTERVAL[hz] ?: return
+        val interval = InputBridge.RATE_TO_INTERVAL[hz] ?: return
         sendIntervalMs = interval
+        currentRateHz = hz
         Log.d(TAG, "回报率设置为 ${hz}Hz (间隔 ${interval}ms)")
         if (_enabled.value) {
             val host = target.get()?.hostAddress ?: "?"
@@ -232,7 +308,7 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
         startAckReceiver(sock)
         startOfflineCheck()
         val host = target.get()?.hostAddress ?: "?"
-        _status.value = "WiFi 桥接已启用 → $host:$port（${RATE_TO_INTERVAL.entries.first { it.value == sendIntervalMs }.key}Hz）"
+        _status.value = "WiFi 桥接已启用 → $host:$port（${currentRateHz}Hz）"
         sendJob = scope.launch(Dispatchers.IO) {
             var lastStatusUpdate = 0L
             while (isActive) {
@@ -359,9 +435,13 @@ class UdpBridge(private val context: Context, private val scope: CoroutineScope)
     }
 
     /** 当前回报率（Hz） */
-    private fun currentRate(): Int = RATE_TO_INTERVAL.entries.firstOrNull { it.value == sendIntervalMs }?.key ?: 250
+    private fun currentRate(): Int = currentRateHz
 
     fun close() {
         stop()
+        vibrationJob?.cancel()
+        vibrationJob = null
+        vibrationSocket?.close()
+        vibrationSocket = null
     }
 }

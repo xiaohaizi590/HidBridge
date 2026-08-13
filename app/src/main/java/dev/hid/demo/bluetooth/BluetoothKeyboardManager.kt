@@ -144,6 +144,8 @@ class BluetoothKeyboardManager(private val context: Context) {
     private val managerScope = CoroutineScope(Dispatchers.IO + Job())
     private val appRegistrationState = MutableStateFlow(false)
     @Volatile private var isRegisteringInProcess = false
+    // 已关闭标志：close() 后线程池已回收，禁止任何再注册 / 连接 / 调度入口
+    @Volatile private var isClosed = false
     // 防重复配对：createBond 进行中忽略重复点击/重复请求
     @Volatile private var isPairingInProcess = false
     private val isAppRegistered: Boolean get() = appRegistrationState.value
@@ -413,7 +415,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun startScanning() {
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
+        if (isClosed || bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
 
         _scannedDevices.value = emptyList()
 
@@ -468,6 +470,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun pairDevice(device: BluetoothDevice) {
+        if (isClosed) return
         if (isPairingInProcess) {
             Log.w("BluetoothKeyboard", "Pairing already in progress, ignoring duplicate request for ${device.address}")
             return
@@ -518,6 +521,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun scheduleConnectionTimeout(device: BluetoothDevice) {
+        if (isClosed) return
         connectionTimeoutFuture?.cancel(false)
         connectionTimeoutFuture = executor.schedule({
             if (_connectedDevice.value == null &&
@@ -540,6 +544,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun connectDevice(device: BluetoothDevice, skipDisconnect: Boolean = false, delayMs: Long = 0) {
+        if (isClosed) return
         lastConnectedDevice = device
         if (!skipDisconnect) connectAttempts = 0
         val hid = hidDeviceProfile
@@ -864,6 +869,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun registerApp() {
+        if (isClosed) return
         val hid = hidDeviceProfile ?: return
         if (isAppRegistered || isRegisteringInProcess) {
             Log.d("BluetoothKeyboard", "registerApp skipped: already registered ($isAppRegistered) or in process ($isRegisteringInProcess)")
@@ -926,6 +932,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun restartHidService() {
+        if (isClosed) return
         val hid = hidDeviceProfile
         if (hid == null) {
             initProfileListener()
@@ -1057,6 +1064,7 @@ class BluetoothKeyboardManager(private val context: Context) {
 
     @SuppressLint("MissingPermission")
     fun close() {
+        isClosed = true
         connectionTimeoutFuture?.cancel(false)
         stopScanning()
         if (isReceiverRegistered) {
@@ -1092,22 +1100,10 @@ class BluetoothKeyboardManager(private val context: Context) {
         appRegistrationState.value = false
         lastConnectedDevice = null
         _connectedDevice.value = null
-    }
 
-    @SuppressLint("MissingPermission")
-    fun cleanup() {
+        // 回收线程池与协程作用域，防止 Activity 重建后旧线程常驻
         managerScope.cancel()
-        try {
-            if (isReceiverRegistered) {
-                context.unregisterReceiver(discoveryReceiver)
-                isReceiverRegistered = false
-            }
-            if (isBondReceiverRegistered) {
-                context.unregisterReceiver(bondStateReceiver)
-                isBondReceiverRegistered = false
-            }
-        } catch (e: Exception) {
-            Log.e("BluetoothKeyboard", "Error during cleanup", e)
-        }
+        reportExecutor.shutdownNow()
+        executor.shutdownNow()
     }
 }

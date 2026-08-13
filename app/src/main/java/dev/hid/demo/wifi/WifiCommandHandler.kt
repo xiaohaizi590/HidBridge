@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import dev.hid.demo.service.VibrateManager
 import org.json.JSONObject
 
 /**
@@ -30,7 +31,8 @@ import org.json.JSONObject
 class WifiCommandHandler(
     private val context: Context,
     private val scope: CoroutineScope,
-    private val commandBridge: WifiCommandBridge
+    private val commandBridge: WifiCommandBridge,
+    private val vibrateManager: VibrateManager? = null
 ) {
 
     companion object {
@@ -38,9 +40,6 @@ class WifiCommandHandler(
 
         /** 心跳间隔（毫秒） */
         private const val PING_INTERVAL_MS = 2000L
-
-        /** UDP 断流回退阈值（毫秒） */
-        private const val UDP_FALLBACK_MS = 3000L
     }
 
     // ---------------- 状态 ----------------
@@ -74,7 +73,6 @@ class WifiCommandHandler(
     val udpStarted: StateFlow<Boolean> = _udpStarted.asStateFlow()
 
     private var pingJob: Job? = null
-    private var lastUdpPacketTime = 0L
 
     // ---------------- 初始化 ----------------
 
@@ -144,6 +142,7 @@ class WifiCommandHandler(
                 "driver_ok" -> handleDriverOk(json)
                 "driver_installed_ok" -> handleDriverInstalledOk(json)
                 "udp_ready" -> handleUdpReady(json)
+                "vibrate" -> handleVibrate(json)
                 "pong" -> _lastPong.value = SystemClock.elapsedRealtime()
                 else -> Log.w(TAG, "未知 JSON 命令: $cmd")
             }
@@ -185,7 +184,11 @@ class WifiCommandHandler(
     private fun handleUdpReady(json: JSONObject) {
         Log.i(TAG, "PC 端 UDP 通道就绪，开始发送手柄数据")
         _udpStarted.value = true
-        lastUdpPacketTime = SystemClock.elapsedRealtime()
+    }
+
+    /** 游戏震动回传：l = 大马达 0-255，s = 小马达 0-255，转发给手机震动执行器 */
+    private fun handleVibrate(json: JSONObject) {
+        vibrateManager?.onVibration(json.optInt("l", 0), json.optInt("s", 0))
     }
 
     // ---------------- 出站命令 ----------------
@@ -277,18 +280,6 @@ class WifiCommandHandler(
             _state.value = BridgeState.WifiOk(ip)
             _sameWifi.value = true
         }
-    }
-
-    /** 收到 UDP 包的时间戳更新，用于断流检测 */
-    fun notifyUdpPacketSent() {
-        lastUdpPacketTime = SystemClock.elapsedRealtime()
-    }
-
-    /** 检查 UDP 是否已断流（超过阈值未发包） */
-    fun isUdpStreamAlive(): Boolean {
-        if (!_udpStarted.value) return false
-        val elapsed = SystemClock.elapsedRealtime() - lastUdpPacketTime
-        return elapsed < UDP_FALLBACK_MS
     }
 
     fun close() {

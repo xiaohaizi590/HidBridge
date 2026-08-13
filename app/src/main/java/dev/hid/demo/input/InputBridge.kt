@@ -45,8 +45,9 @@ class InputBridge(private val btManager: BluetoothKeyboardManager) {
         const val RATE_250 = 250
         const val RATE_500 = 500  // WiFi 默认
         const val RATE_750 = 750
+        const val RATE_1000 = 1000
 
-        val RATE_TO_INTERVAL = mapOf(125 to 8L, 250 to 4L, 500 to 2L, 750 to 1L)
+        val RATE_TO_INTERVAL = mapOf(125 to 8L, 250 to 4L, 500 to 2L, 750 to 1L, 1000 to 1L)
     }
 
     /** WiFi 桥接出口（可选）：最新快照会同步给它，由它通过 UDP 转发到电脑 */
@@ -106,7 +107,7 @@ class InputBridge(private val btManager: BluetoothKeyboardManager) {
         }
     }
 
-    /** 设置回报率（Hz）：125/250/500/750。即时生效。 */
+    /** 设置回报率（Hz）：125/250/500/750/1000。即时生效。 */
     fun setRate(hz: Int) {
         val interval = RATE_TO_INTERVAL[hz] ?: return
         minSendIntervalMs = interval
@@ -307,8 +308,13 @@ class InputBridge(private val btManager: BluetoothKeyboardManager) {
             rightY = rightY
         )
         if (!force && snapshot == lastSent) return
+        // 回中复位状态（无按键 + 四轴归零）必须立即发送，否则节流会吞掉
+        // 松手回中帧，导致电脑端摇杆卡在最后一个非零位置
+        val isReset = snapshot.buttonMask == 0 &&
+            snapshot.leftX == 0f && snapshot.leftY == 0f &&
+            snapshot.rightX == 0f && snapshot.rightY == 0f
         val now = SystemClock.uptimeMillis()
-        if (!force && now - lastSendAt < minSendIntervalMs) return
+        if (!force && !isReset && now - lastSendAt < minSendIntervalMs) return
         lastSendAt = now
         lastSent = snapshot
         _state.value = snapshot

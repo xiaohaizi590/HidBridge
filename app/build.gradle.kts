@@ -14,8 +14,8 @@ android {
     applicationId = "dev.hid.demo"
     minSdk = 28
     targetSdk = 36
-    versionCode = 3
-    versionName = "1.3.0"
+    versionCode = 7
+    versionName = "1.3.3.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -51,7 +51,7 @@ tasks.matching { it.name == "assembleRelease" }.configureEach {
         val dir = releaseApkDir.get().asFile
         fileTree(dir) { include("*.apk") }.forEach { apk ->
             if (apk.name == "app-release.apk") {
-                val newFile = File(dir, "HidBridge-v1.3.0.apk")
+                val newFile = File(dir, "HidBridge-v1.3.3.6.apk")
                 apk.copyTo(newFile, overwrite = true)
                 apk.delete()
             }
