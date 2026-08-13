@@ -116,7 +116,7 @@ cd HidBridge && ./gradlew assembleRelease
 | 均衡 | 250Hz | 普通游戏 |
 | **电竞** | **500Hz** | WiFi 默认 |
 | 极致 | 750Hz | 格斗/硬核 |
-| 超频 | 1000Hz | 追求极限（间隔同 750Hz） |
+| 超频 | 1000Hz | 追求极限 |
 
 ### 屏幕虚拟手柄
 
