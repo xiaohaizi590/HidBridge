@@ -7,7 +7,7 @@
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non%20Commercial-red.svg)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-9%2B-3DDC84?style=flat&logo=android&logoColor=white)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2-7F52FF?style=flat&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com/xiaohaizi590/HidBridge/releases)
+[![Version](https://img.shields.io/badge/version-1.3.3.6-blue)](https://github.com/xiaohaizi590/HidBridge/releases)
 
 [English README](README.en.md) · [下载 APK](https://github.com/xiaohaizi590/HidBridge/releases)
 
@@ -37,8 +37,12 @@
 <tr>
 <td align="center" width="25%"><h3>🔌 物理手柄桥接</h3>USB-C 拉伸手柄即插即用，解决电脑蓝牙兼容性问题</td>
 <td align="center" width="25%"><h3>🎯 双通道融合</h3>蓝牙 HID 兜底 + WiFi UDP 主通道，自动切换零感知</td>
-<td align="center" width="25%"><h3>⚡ 极致低延迟</h3>125~750Hz 可调回报率，WiFi 模式低至 2ms</td>
+<td align="center" width="25%"><h3>⚡ 极致低延迟</h3>125~1000Hz 五档可调回报率，WiFi 模式低至 2ms</td>
+</tr>
+<tr>
 <td align="center" width="25%"><h3>🖥️ 虚拟 Xbox 手柄</h3>ViGEmBus 驱动级注入，兼容所有 Xbox 游戏</td>
+<td align="center" width="25%"><h3>📱 屏幕虚拟手柄</h3>无实体手柄也能玩，Xbox/PS5 双布局可编辑</td>
+<td align="center" width="25%"><h3>📳 游戏震动回传</h3>PC 震动命令回传，实体马达优先、手机震动兜底</td>
 </tr>
 </table>
 
@@ -87,7 +91,7 @@ GamepadBridge.exe
 ```bash
 git clone https://github.com/xiaohaizi590/HidBridge.git
 cd HidBridge && ./gradlew assembleRelease
-# APK: app/build/outputs/apk/release/HidBridge-v1.3.0.apk
+# APK: app/build/outputs/apk/release/HidBridge-v1.3.3.6.apk
 ```
 
 **安装后**：授予蓝牙、位置、附近设备权限
@@ -108,10 +112,29 @@ cd HidBridge && ./gradlew assembleRelease
 
 | 档位 | 频率 | 场景 |
 |------|------|------|
-| 省电 | 125Hz | 日常 |
+| 省电 | 125Hz | 日常、蓝牙模式默认 |
 | 均衡 | 250Hz | 普通游戏 |
 | **电竞** | **500Hz** | WiFi 默认 |
 | 极致 | 750Hz | 格斗/硬核 |
+| 超频 | 1000Hz | 追求极限（间隔同 750Hz） |
+
+### 屏幕虚拟手柄
+
+无实体手柄时可直接用屏幕虚拟手柄，Xbox Series / PS5 双布局：
+
+- 3D 立体按键、模拟摇杆（L3/R3 保持）、十字键斜向组合
+- 按键布局可自由编辑，持久化保存
+- 按键震动反馈、游戏震动回传可单独开关
+- 纯黑全屏游戏模式，隐藏系统栏防误触
+
+### 游戏震动回传
+
+PC 端游戏震动命令经 UDP（47810）+ RFCOMM 双通道回传手机：
+
+| 执行器 | 说明 |
+|------|------|
+| 实体手柄马达 | USB-C 拉伸手柄支持时优先驱动（SET_REPORT） |
+| 手机震动 | 无马达手柄/模拟手柄时降级，主界面可开关 |
 
 ---
 
@@ -121,8 +144,10 @@ cd HidBridge && ./gradlew assembleRelease
 ┌──── Android 手机 ────┐     ┌──── Windows 电脑 ────┐
 │ BluetoothHidDevice    │────▶│ Windows HID 栈        │
 │ InputBridge (手柄)    │     │ GamepadBridge.exe          │
-│ WifiCommandBridge     │◀────│   RFCOMM 命令通道     │
-│ UdpBridge (UDP 发送)  │────▶│   UDP → ViGEmBus      │
+│ VirtualGamepad (模拟) │     │   RFCOMM 命令通道     │
+│ WifiCommandBridge     │◀────│   UDP → ViGEmBus      │
+│ UdpBridge (UDP 发送)  │────▶│                       │
+│ VibrateManager (震动) │◀────│   震动回传 47810/命令  │
 └───────────────────────┘     └───────────────────────┘
 ```
 
@@ -162,12 +187,12 @@ PC→手机: {"cmd":"udp_ready"}
 
 <details><summary><strong>电脑没识别到手柄？</strong></summary>
 
-控制面板 → 游戏控制器 检查；确保 receiver.exe 正在运行。
+控制面板 → 游戏控制器 检查；确保 GamepadBridge.exe 正在运行。
 </details>
 
 <details><summary><strong>WiFi 桥接连不上？</strong></summary>
 
-确认同网段、receiver.exe 运行中、防火墙已放行。
+确认同网段、GamepadBridge.exe 运行中、防火墙已放行。
 </details>
 
 <details><summary><strong>按键卡顿？</strong></summary>
@@ -186,7 +211,7 @@ PC→手机: {"cmd":"udp_ready"}
 ### 构建
 
 ```bash
-./gradlew assembleRelease   # 输出 HidBridge-v1.3.0.apk
+./gradlew assembleRelease   # 输出 HidBridge-v1.3.3.6.apk
 ```
 
 ### 项目结构
@@ -196,11 +221,11 @@ HidBridge/
 ├── app/src/main/
 │   ├── assets/installer/GamepadBridge.exe
 │   ├── java/dev/hid/demo/
-│   │   ├── bluetooth/     # HID 引擎
-│   │   ├── input/          # 手柄桥接 + UDP
-│   │   ├── wifi/           # RFCOMM 通道
-│   │   ├── service/        # 前台保活
-│   │   └── ui/             # Compose 界面
+│   │   ├── bluetooth/     # HID 引擎 + 配对连接
+│   │   ├── input/          # 手柄桥接 / UDP / 虚拟手柄输入
+│   │   ├── wifi/           # RFCOMM 命令通道
+│   │   ├── service/        # 前台保活 + 震动回传执行器
+│   │   └── ui/             # Compose 界面（主界面/虚拟手柄/黑屏）
 │   └── res/
 └── gradle/
 ```
