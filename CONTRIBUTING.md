@@ -71,7 +71,7 @@ adb install app-debug.apk
 - Compose with Material3 components
 - Document public APIs with KDoc
 
-### C (PC receiver.exe)
+### C (PC GamepadBridge.exe)
 
 - C11 standard
 - 4-space indentation
